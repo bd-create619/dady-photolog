@@ -125,6 +125,9 @@ export default function App() {
   const [editDate, setEditDate] = useState("");
   const [editPlace, setEditPlace] = useState("");
   const [editVenue, setEditVenue] = useState("");
+  const [shareOpen, setShareOpen] = useState(null); // { url } | null
+  const [copied, setCopied] = useState(false);
+  const [didParseHash, setDidParseHash] = useState(false);
 
   // Firestoreをリアルタイム購読（追加・削除・並び替えが自動で全端末に反映されます）
   useEffect(() => {
@@ -334,6 +337,62 @@ export default function App() {
     }
   }, [events, currentEventKey]);
 
+  // URLの#event=... を読み取って、該当ページを直接開けるようにする（共有リンク対応）
+  useEffect(() => {
+    if (didParseHash || !loaded) return;
+    const hash = window.location.hash;
+    if (hash.startsWith("#event=")) {
+      const key = decodeURIComponent(hash.slice(7));
+      if (events.find((e) => e.key === key)) {
+        setCurrentEventKey(key);
+      }
+    }
+    setDidParseHash(true);
+  }, [loaded, events, didParseHash]);
+
+  // 案件ページの行き来に合わせてURLを更新（共有・ブックマーク用）
+  useEffect(() => {
+    if (!didParseHash) return;
+    const base = window.location.pathname + window.location.search;
+    if (currentEventKey) {
+      window.history.replaceState(null, "", base + "#event=" + encodeURIComponent(currentEventKey));
+    } else {
+      window.history.replaceState(null, "", base);
+    }
+  }, [currentEventKey, didParseHash]);
+
+  function openShareTop() {
+    const url = window.location.origin + window.location.pathname;
+    setCopied(false);
+    setShareOpen({ url, label: "このアルバム全体" });
+  }
+
+  function openShareEvent(key) {
+    const url = window.location.origin + window.location.pathname + "#event=" + encodeURIComponent(key);
+    setCopied(false);
+    setShareOpen({ url, label: "この案件のページ" });
+  }
+
+  async function copyShareUrl() {
+    try {
+      await navigator.clipboard.writeText(shareOpen.url);
+      setCopied(true);
+    } catch (e) {
+      // クリップボードAPIが使えない場合のフォールバック
+      const ta = document.createElement("textarea");
+      ta.value = shareOpen.url;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+      } catch (err) {
+        console.error(err);
+      }
+      document.body.removeChild(ta);
+    }
+  }
+
   return (
     <div style={{ background: "var(--wall)", minHeight: "100vh" }}>
       <style>{`
@@ -502,6 +561,15 @@ export default function App() {
                   </div>
                 );
               })}
+              <div style={{ textAlign: "center", marginTop: 12 }}>
+                <button
+                  onClick={() => openShareEvent(currentEvent.key)}
+                  className="pg-mono"
+                  style={{ fontSize: 11, color: "var(--ink-dim)", background: "var(--mat)", border: "1px solid var(--ink-dim)", borderRadius: 20, padding: "8px 18px", cursor: "pointer" }}
+                >
+                  🔗 この案件を共有
+                </button>
+              </div>
             </main>
           </>
         ) : (
@@ -526,6 +594,17 @@ export default function App() {
                   <div className="pg-mono" style={{ color: "var(--ink-dim)", fontSize: 16 }}>›</div>
                 </button>
               ))
+            )}
+            {loaded && events.length > 0 && (
+              <div style={{ textAlign: "center", marginTop: 12 }}>
+                <button
+                  onClick={openShareTop}
+                  className="pg-mono"
+                  style={{ fontSize: 11, color: "var(--ink-dim)", background: "var(--mat)", border: "1px solid var(--ink-dim)", borderRadius: 20, padding: "8px 18px", cursor: "pointer" }}
+                >
+                  🔗 このアルバムを共有
+                </button>
+              </div>
             )}
           </main>
         )}
@@ -619,6 +698,31 @@ export default function App() {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* 共有ポップアップ */}
+        {shareOpen && (
+          <div
+            style={{ position: "fixed", inset: 0, background: "#2B2622aa", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 60 }}
+            onClick={() => setShareOpen(null)}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--mat)", borderRadius: 6, width: "100%", maxWidth: 380, padding: 22 }}>
+              <div className="pg-serif" style={{ fontWeight: 700, marginBottom: 6, fontSize: 17 }}>リンクを共有</div>
+              <div className="pg-mono" style={{ fontSize: 10.5, color: "var(--ink-dim)", marginBottom: 10 }}>{shareOpen.label}のリンクです</div>
+              <input
+                readOnly
+                value={shareOpen.url}
+                onFocus={(e) => e.target.select()}
+                style={{ ...inputStyle, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={copyShareUrl} style={primaryBtn}>
+                  {copied ? "コピーしました ✓" : "リンクをコピーする"}
+                </button>
+                <button onClick={() => setShareOpen(null)} style={secondaryBtn}>閉じる</button>
+              </div>
             </div>
           </div>
         )}
