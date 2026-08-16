@@ -567,7 +567,7 @@ export default function App() {
                   className="pg-mono"
                   style={{ fontSize: 11, color: "var(--ink-dim)", background: "var(--mat)", border: "1px solid var(--ink-dim)", borderRadius: 20, padding: "8px 18px", cursor: "pointer" }}
                 >
-                  🔗 この案件を共有
+                  🔗 このページを共有
                 </button>
               </div>
             </main>
